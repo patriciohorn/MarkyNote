@@ -10,6 +10,7 @@ export default function App() {
   const [notes, setNotes] = React.useState([]);
   //   const [currentNoteId, setCurrentNoteId] = React.useState(notes[0]?.id || ''); used before db, no longer using localstorage so intial wil; be empty
   const [currentNoteId, setCurrentNoteId] = React.useState('');
+  const [tempNoteText, setTempNoteText] = React.useState('');
 
   const currentNote = notes.find((note) => note.id === currentNoteId) || notes[0];
   const sortedNotes = notes.sort((a, b) => b.updatedAt - a.updatedAt);
@@ -37,6 +38,26 @@ export default function App() {
     }
   }, [notes]);
 
+  // setting the tempText to use it as a prop on Editor instead of currentNote. This way every time a user write on the Editor, instead of updating the db (too many unnecessary requests), it will update the tempNoteText state, then I'll use tempText on debouncing strategy below
+  React.useEffect(() => {
+    if (currentNote) {
+      setTempNoteText(currentNote.body);
+    }
+  }, [currentNote]);
+
+  // Debouncing -> delay the update on firebase by 500ms
+  // effect runs every time tempNoteText changes, delays the sending of request to Firebase using setTimeout and then clearTimeout to clean the old value
+  // this still runs on every keystroke (every time tempnotext change) but debouncing help us delay the request by .5s
+  // Waits .5s when stop writing
+  React.useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (tempNoteText !== currentNote.body) {
+        updateNote(tempNoteText);
+      }
+    }, 500);
+    return () => clearTimeout(timeoutId); // this function will get called anytime this useEffect it's about to run again
+  }, [tempNoteText]);
+
   async function createNewNote() {
     const dateCreated = Date.now();
 
@@ -45,7 +66,7 @@ export default function App() {
       createdAt: dateCreated,
       updatedAt: dateCreated
     };
-    // setNotes((prevNotes) => [newNote, ...prevNotes]); instead of setting notes manually we're setting the notes on the snapshot. this line was before applying db
+    // setNotes((prevNotes)  => [newNote, ...prevNotes]); instead of setting notes manually we're setting the notes on the snapshot. this line was before applying db
     // setCurrentNoteId(newNote.id); before adding db
 
     // ↓ returns a reference (as a promise) to the document created (addDoc)
@@ -100,7 +121,7 @@ export default function App() {
             newNote={createNewNote}
             deleteNote={deleteNote}
           />
-          <Editor currentNote={currentNote} updateNote={updateNote} />
+          <Editor tempNoteText={tempNoteText} setTempNoteText={setTempNoteText} />
         </Split>
       ) : (
         <div className="no-notes">
